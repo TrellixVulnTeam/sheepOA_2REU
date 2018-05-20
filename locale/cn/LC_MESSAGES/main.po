@@ -1,0 +1,62 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2018-05-19 04:25+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: utf8\n"
+
+#: sheepOA.py:42
+msgid "Server IP:  "
+msgstr "IP 地址:  "
+
+#: sheepOA.py:44
+msgid "Server Port:  "
+msgstr "端口： "
+
+#: sheepOA.py:46
+msgid "Username:  "
+msgstr "用户名:  "
+
+#: sheepOA.py:48
+msgid "Password:  "
+msgstr "密码： "
+
+#: sheepOA.py:51
+msgid "Remember password"
+msgstr "记住密码:   "
+
+#: sheepOA.py:52
+msgid "Login"
+msgstr "登录"
+
+#: sheepOA.py:54
+msgid "Type the form message and click the login button to continue!"
+msgstr "键入表单中的信息，然后点击登录按钮以继续！"
+
+#: sheepOA.py:96
+msgid "Question"
+msgstr "询问"
+
+#: sheepOA.py:96
+msgid "Are you sure to quit?"
+msgstr "您确定要退出吗?"
+
+#: sheepOA.py:122
+msgid "Critical"
+msgstr "严重!"
+
+#: sheepOA.py:123
+msgid "{} can't be empty!"
+msgstr "{} 不能为空!"
