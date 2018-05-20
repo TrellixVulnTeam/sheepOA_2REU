@@ -5,7 +5,7 @@
 @Copyright (c) 2018 yushuibo. All rights reserved.
 @Licence: GPL-2
 @Email: hengchen2005@gmail.com
-@File: websocket-client.py
+@File: client.py
 @Create: 2018-05-19 23:57:45
 @Last Modified: 2018-05-19 23:57:45
 @Desc: --
