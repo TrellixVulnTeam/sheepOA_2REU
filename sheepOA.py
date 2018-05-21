@@ -14,6 +14,7 @@
 import os
 import sys
 import locale
+import asyncio
 import gettext
 import threading
 import webbrowser
@@ -134,7 +135,8 @@ class LoginWin(QWidget):
     def closeEvent(self, event):
         """override default exit event"""
         question(
-            _('Are you sure to quit?'), '',
+            _('Question'),
+            _('Are you sure to quit?'),
             event=event,
             parent=self)
 
@@ -159,17 +161,14 @@ class LoginWin(QWidget):
                 self.dconf[k] = v
             else:
                 critical(
+                    _('Critical'),
                     _('{} can\'t be empty!').format({
-                                                        'ip':
-                                                            _('The server IP'),
-                                                        'port':
-                                                            _(
-                                                                'The server port'),
-                                                        'username':
-                                                            _('The username'),
-                                                        'passwd':
-                                                            _('The password')
-                                                    }.get(k)), '',
+
+                    'ip': _('The server IP'),
+                    'port': _('The server port'),
+                    'username': _('The username'),
+                    'passwd': _('The password')
+                                                    }.get(k)),
                     parent=self)
                 return (False, None)
         return (True, self.dconf)
@@ -180,33 +179,30 @@ class LoginWin(QWidget):
         if r and d:
             # save config to file
             conf_save(self.parser, d)
-
             # process login
-            t = threading.Thread(target=self.start_login, args=(d,))
-            t.start()
+            self.start_login(d)
+            # loop = asyncio.get_event_loop()
+            # t = threading.Thread(target=self.start_login, args=(d,loop,))
+            # t.start()
 
     def start_login(self, d):
-        wsc = WebSocketClient(d['ip'], d['port'], d['username'],
-                              d['passwd'])
-        wsc.add_handler('login_succeed', [self.login_succeed])
-        wsc.add_handler('login_failed', [self.login_failed])
-        wsc.add_handler('recevied_notify', [self.recevied_notify])
+        wsc = WebSocketClient(d['ip'], d['port'], d['username'], d['passwd'])
         wsc.start()
 
-    async def login_succeed(self, r):
+    def login_succeed(self):
         # login succeed
         self.tray.show()
         self.setVisible(False)
 
-    def login_failed(self, r):
-        information(_('Login Failed!'), _(
+    def login_failed(self):
+        self.information(_('Login Failed!'), _(
             'Please checked bellowed items for this issue:\n \
             1.Make sure your network is working;\n \
             2.Make sure the \'IP\' and \'PORT\' of server is right;\n \
-            3.Check you username and password is right.'))
+            3.Check you username and password is right.'), parent=self)
 
-    async def recevied_notify(self, r):
-        self.tray.show_msg(r['from'], r['content'])
+    def recevied_notify(self, _from, url):
+        self.tray.show_msg(_from, url)
 
     def remember_passwd(self, checkbox):
         if checkbox.isChecked():
@@ -220,7 +216,7 @@ class LoginWin(QWidget):
 # overrid QMessageBox
 def question(rtext, info, event=None, parent=None):
     msg_box = QMessageBox(parent)
-    msg_box.setWindowTitle(_('Question'))
+    msg_box.setWindowTitle(_('SheepOA'))
     msg_box.setIcon(QMessageBox.Question)
     msg_box.setText(rtext)
     msg_box.setInformativeText(info)
@@ -236,7 +232,7 @@ def question(rtext, info, event=None, parent=None):
 
 def warning(rtext, info, event=None, parent=None):
     msg_box = QMessageBox(parent)
-    msg_box.setWindowTitle(_('Warning'))
+    msg_box.setWindowTitle(_('SheepOA'))
     msg_box.setIcon(QMessageBox.Warning)
     msg_box.setText(rtext)
     msg_box.setInformativeText(info)
@@ -252,7 +248,7 @@ def warning(rtext, info, event=None, parent=None):
 
 def information(rtext, info, event=None, parent=None):
     msg_box = QMessageBox(parent)
-    msg_box.setWindowTitle(_('Information'))
+    msg_box.setWindowTitle(_('SheepOA'))
     msg_box.setIcon(QMessageBox.Information)
     msg_box.setText(rtext)
     msg_box.setInformativeText(info)
@@ -265,7 +261,7 @@ def information(rtext, info, event=None, parent=None):
 
 def critical(rtext, info, event=None, parent=None):
     msg_box = QMessageBox(parent)
-    msg_box.setWindowTitle(_('Critical'))
+    msg_box.setWindowTitle(_('SheepOA'))
     msg_box.setIcon(QMessageBox.Critical)
     msg_box.setText(rtext)
     msg_box.setInformativeText(info)
@@ -323,11 +319,10 @@ if __name__ == '__main__':
     if locale.getdefaultlocale()[0] == 'zh_CN':
         t = gettext.translation(
             'main', 'locale', languages=['cn'], fallback=True)
-        _ = t.gettext
     else:
         t = gettext.translation(
             'main', 'locale', languages=['en'], fallback=True)
-        _ = t.gettext
+    _ = t.gettext
 
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon(QPixmap('./imgs/icon.ico')))
