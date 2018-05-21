@@ -14,12 +14,15 @@
 import sys
 import json
 import asyncio
+
 import websockets
+
+import util
 
 
 class GraceFuture(asyncio.Future):
     def __init__(self):
-        asyncio.Future.__init__(self)
+        super(GraceFuture, self).__init__()
 
     def set_result_default(self, result):
         if not self.done():
@@ -33,6 +36,7 @@ class Client(object):
     def __init__(self, cid, ws):
         self.cid = cid
         self.ws = ws
+        self.username = None
         self.islogin = False
         self.isalive = True
         self.future = GraceFuture()
@@ -44,16 +48,18 @@ class Client(object):
         self.future = GraceFuture()
         return result
 
-    def login(self, auth):
-        print('==> Server client login: {}'.format(auth))
-        if set(auth.items()).issubset(Client.users.items()):
+    def login(self, d_msg):
+        print('==> Server client login: {}'.format(d_msg))
+        if d_msg['name'] in Client.users and d_msg['passwd'] == Client.users[
+            d_msg['name']]:
             self.islogin = True
         else:
             self.islogin = False
+        self.username = d_msg['name']
 
     def pre_send(self, message):
         print('==> Server client pre_send: {}'.format(message))
-        self.future.set_result_default([]).append(json.dumps(message))
+        self.future.set_result_default([]).append(message)
 
 
 class Server(object):
@@ -64,21 +70,23 @@ class Server(object):
         #  print('==> Server clients: {}'.format(self.ra_to_client))
         return self.ra_to_client.values()
 
-    def published(self, client):
+    def auth_resp(self, client):
         clients = self.get_clients()
-        message = {'cid': client.cid, 'login-state': client.islogin}
+        resp = util.ResponseMsg('auth', None, client.username,
+                           client.islogin).to_json()
         for client in clients:
-            print('==> Server publish message to client: {}-->{}'.format(
-                message, client.cid))
-            client.pre_send(message)
+            print('==> Server response message to client: {}-->{}'.format(
+                resp, client.username))
+            client.pre_send(resp)
 
     def ws_message_handle(self, ws, message):
         print('==> Server handle message: {}'.format(message))
         ra = ws.remote_address
         client = self.ra_to_client.get(ra, None)
-        if client is not None:
-            client.login(json.loads(message))
-            self.published(client)
+        d_msg = json.loads(message)
+        if client is not None and d_msg['type'] == 'auth':
+            client.login(d_msg)
+            self.auth_resp(client)
 
     async def ws_handler(self, ws, path):
         ra = ws.remote_address

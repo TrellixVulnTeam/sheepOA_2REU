@@ -15,6 +15,7 @@ import os
 import sys
 import locale
 import gettext
+import threading
 import webbrowser
 from configparser import ConfigParser
 from functools import partial
@@ -23,6 +24,9 @@ from PyQt5.QtWidgets import QApplication, QWidget, QDesktopWidget, \
     QLabel, QLineEdit, QCheckBox, QPushButton, QHBoxLayout, QFormLayout, \
     QVBoxLayout, QMessageBox, QSystemTrayIcon, QMenu, QAction
 from PyQt5.QtGui import QIcon, QPixmap
+
+from client import WebSocketClient
+from util import ResponseMsg
 
 base_dir = os.getcwd()
 conf = os.path.join(base_dir, 'conf.ini')
@@ -44,10 +48,11 @@ def conf_load(parser, cf):
     return dict(parser.items('global'))
 
 
-class Login_win(QWidget):
+class LoginWin(QWidget):
     def __init__(self):
-        super(Login_win, self).__init__()
+        super(LoginWin, self).__init__()
         self.parser = ConfigParser()
+        self.tray = Tray(self)
 
     def init_ui(self):
         # set default size for root window
@@ -83,8 +88,9 @@ class Login_win(QWidget):
 
         login_btn = QPushButton(_('Login'))
         login_wait = QLabel(
-            _('Type the all information above Form.\nClick the "Login" button to continue!'
-              ))
+            _(
+                'Type the all information above Form.\nClick the "Login" button to continue!'
+            ))
         login_wait.setStyleSheet("QLabel{color:rgb(70,140,200,240);}")
         login_btn.clicked[bool].connect(
             partial(
@@ -128,8 +134,7 @@ class Login_win(QWidget):
     def closeEvent(self, event):
         """override default exit event"""
         question(
-            _('Question'),
-            _('Are you sure to quit?'),
+            _('Are you sure to quit?'), '',
             event=event,
             parent=self)
 
@@ -154,17 +159,17 @@ class Login_win(QWidget):
                 self.dconf[k] = v
             else:
                 critical(
-                    _('Critical'),
                     _('{} can\'t be empty!').format({
-                        'ip':
-                        _('The server IP'),
-                        'port':
-                        _('The server port'),
-                        'username':
-                        _('The username'),
-                        'passwd':
-                        _('The password')
-                    }.get(k)),
+                                                        'ip':
+                                                            _('The server IP'),
+                                                        'port':
+                                                            _(
+                                                                'The server port'),
+                                                        'username':
+                                                            _('The username'),
+                                                        'passwd':
+                                                            _('The password')
+                                                    }.get(k)), '',
                     parent=self)
                 return (False, None)
         return (True, self.dconf)
@@ -175,11 +180,33 @@ class Login_win(QWidget):
         if r and d:
             # save config to file
             conf_save(self.parser, d)
+
             # process login
-            information('test', 'ip={}'.format(d['ip']), parent=self)
-            # login succeed
-            Tray(self).show()
-            self.setVisible(False)
+            t = threading.Thread(target=self.start_login, args=(d,))
+            t.start()
+
+    def start_login(self, d):
+        wsc = WebSocketClient(d['ip'], d['port'], d['username'],
+                              d['passwd'])
+        wsc.add_handler('login_succeed', [self.login_succeed])
+        wsc.add_handler('login_failed', [self.login_failed])
+        wsc.add_handler('recevied_notify', [self.recevied_notify])
+        wsc.start()
+
+    async def login_succeed(self, r):
+        # login succeed
+        self.tray.show()
+        self.setVisible(False)
+
+    def login_failed(self, r):
+        information(_('Login Failed!'), _(
+            'Please checked bellowed items for this issue:\n \
+            1.Make sure your network is working;\n \
+            2.Make sure the \'IP\' and \'PORT\' of server is right;\n \
+            3.Check you username and password is right.'))
+
+    async def recevied_notify(self, r):
+        self.tray.show_msg(r['from'], r['content'])
 
     def remember_passwd(self, checkbox):
         if checkbox.isChecked():
@@ -273,12 +300,13 @@ class Tray(QSystemTrayIcon):
             else:
                 parent.show()
 
-    def show_msg(self, _from):
+    def show_msg(self, _from, url):
         icon = QSystemTrayIcon.MessageIcon(QSystemTrayIcon.Information)
         self.showMessage(
             _('Notify!'),
-            _('A new message from {}.\nClicked this to view details!'.format(
-                _from)), icon)
+            _(
+                'A new message from {}.\nClicked this to view detail of:\n{}'.format(
+                    _from, url)), icon)
 
     def msg_click(self, url):
         # fork a webbroser object to open url
@@ -303,6 +331,6 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon(QPixmap('./imgs/icon.ico')))
-    login_win = Login_win()
+    login_win = LoginWin()
     login_win.init_ui()
     sys.exit(app.exec_())
