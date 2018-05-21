@@ -197,11 +197,11 @@ class LoginWin(QWidget):
         self.setVisible(False)
 
     def login_failed(self):
-        self.login_wait.setText(_('\nLogin Failed!\n\n \
-To fix this issue, please try:\n \
-1.Make sure your network is fine\n \
-2.Make sure the \'IP\' and \'PORT\' of server is right\n \
-3.Check the username and password is right or not'))
+        self.login_wait.setText(_('\nLogin Failed!\n\n'
+                        'To fix this issue, please try:\n'
+                        '1.Make sure your network is fine\n'
+                        '2.Make sure the \'IP\' and \'PORT\' of server is right\n'
+                        '3.Check the username and password is right or not'))
         self.login_wait.setStyleSheet("QLabel{color:rgb(240,0,0,240);}")
 
     def recevied_notify(self, msg):
