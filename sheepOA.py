@@ -14,9 +14,7 @@
 import os
 import sys
 import locale
-import asyncio
 import gettext
-import threading
 import webbrowser
 from configparser import ConfigParser
 from functools import partial
@@ -27,7 +25,7 @@ from PyQt5.QtWidgets import QApplication, QWidget, QDesktopWidget, \
 from PyQt5.QtGui import QIcon, QPixmap
 
 from client import WebSocketClient
-from util import ResponseMsg
+from quamash import QEventLoop
 
 base_dir = os.getcwd()
 conf = os.path.join(base_dir, 'conf.ini')
@@ -88,11 +86,11 @@ class LoginWin(QWidget):
                 passwd_edit.setText(self.dconf['passwd'])
 
         login_btn = QPushButton(_('Login'))
-        login_wait = QLabel(
+        self.login_wait = QLabel(
             _(
-                'Type the all information above Form.\nClick the "Login" button to continue!'
+                '\nType the all information above Form.\nClick the "Login" button to continue!'
             ))
-        login_wait.setStyleSheet("QLabel{color:rgb(70,140,200,240);}")
+        self.login_wait.setStyleSheet("QLabel{color:rgb(70,140,200,240);}")
         login_btn.clicked[bool].connect(
             partial(
                 self.login, {
@@ -120,7 +118,7 @@ class LoginWin(QWidget):
 
         label_box = QHBoxLayout()
         label_box.addStretch(1)
-        label_box.addWidget(login_wait)
+        label_box.addWidget(self.login_wait)
         label_box.addStretch(1)
 
         vbox = QVBoxLayout()
@@ -180,13 +178,17 @@ class LoginWin(QWidget):
             # save config to file
             conf_save(self.parser, d)
             # process login
-            self.start_login(d)
+            # self.start_login(d)
             # loop = asyncio.get_event_loop()
-            # t = threading.Thread(target=self.start_login, args=(d,loop,))
-            # t.start()
+            import threading
+            t = threading.Thread(target=self.start_login, args=(d,))
+            t.start()
 
     def start_login(self, d):
         wsc = WebSocketClient(d['ip'], d['port'], d['username'], d['passwd'])
+        wsc.add_handler('login_succeed', self.login_succeed)
+        wsc.add_handler('login_failed', self.login_failed)
+        wsc.add_handler('recevied_notify', self.recevied_notify)
         wsc.start()
 
     def login_succeed(self):
@@ -195,14 +197,15 @@ class LoginWin(QWidget):
         self.setVisible(False)
 
     def login_failed(self):
-        self.information(_('Login Failed!'), _(
-            'Please checked bellowed items for this issue:\n \
-            1.Make sure your network is working;\n \
-            2.Make sure the \'IP\' and \'PORT\' of server is right;\n \
-            3.Check you username and password is right.'), parent=self)
+        self.login_wait.setText(_('\nLogin Failed!\n\n \
+To fix this issue, please try:\n \
+1.Make sure your network is fine\n \
+2.Make sure the \'IP\' and \'PORT\' of server is right\n \
+3.Check the username and password is right or not'))
+        self.login_wait.setStyleSheet("QLabel{color:rgb(240,0,0,240);}")
 
-    def recevied_notify(self, _from, url):
-        self.tray.show_msg(_from, url)
+    def recevied_notify(self, msg):
+        self.tray.show_msg(msg)
 
     def remember_passwd(self, checkbox):
         if checkbox.isChecked():
@@ -279,9 +282,9 @@ class Tray(QSystemTrayIcon):
 
     def init_ui(self):
         menu = QMenu()
-        show_action = QAction('Show Msg', self, triggered=self.show_msg)
+        # show_action = QAction('Show Msg', self, triggered=self.show_msg)
         quit_action = QAction(_('Quit'), self, triggered=self.quit)
-        menu.addAction(show_action)
+        # menu.addAction(show_action)
         menu.addAction(quit_action)
         self.setContextMenu(menu)
         #  self.activated.connect(self.icon_clicked)
@@ -296,17 +299,17 @@ class Tray(QSystemTrayIcon):
             else:
                 parent.show()
 
-    def show_msg(self, _from, url):
+    def show_msg(self, msg):
         icon = QSystemTrayIcon.MessageIcon(QSystemTrayIcon.Information)
+        self.url = msg.content
         self.showMessage(
             _('Notify!'),
-            _(
-                'A new message from {}.\nClicked this to view detail of:\n{}'.format(
-                    _from, url)), icon)
+            _('A new message from {}.\nClicked this to view detail of:\n{}'. \
+            format(msg._from, msg.content)), icon)
 
-    def msg_click(self, url):
+    def msg_click(self):
         # fork a webbroser object to open url
-        webbrowser.open(url, new=2)
+        webbrowser.open(self.url, new=2)
 
     def quit(self):
         self.setVisible(False)

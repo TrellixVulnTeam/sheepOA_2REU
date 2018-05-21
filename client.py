@@ -27,6 +27,10 @@ class WebSocketClient(object):
         self.ser_port = ser_port
         self.username = username
         self.passwd = passwd
+        self.handlers = {}
+
+    def add_handler(self, e_type, handler):
+        self.handlers[e_type] = handler
 
     async def run(self):
         async with websockets.connect(''.join(
@@ -51,16 +55,18 @@ class WebSocketClient(object):
                     msg = util.js_to_msg(r)
                     if msg._type == 'auth' and msg.content:
                         # login secceed
-                        login_succeed()
+                        self.handlers['login_succeed']()
                     elif msg._type == 'auth' and not msg.content:
                         # login failed
-                        login_failed()
+                        self.handlers['login_failed']()
                     elif msg._type == 'notify' and msg.to == self.username:
                         # to my message
-                        recevied_notify()
+                        self.handlers['recevied_notify'](msg)
                     recv_task = asyncio.ensure_future(ws.recv())
 
     def start(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         asyncio.get_event_loop().run_until_complete(self.run())
 
 
