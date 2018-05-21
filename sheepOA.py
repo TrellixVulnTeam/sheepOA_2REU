@@ -19,13 +19,13 @@ import webbrowser
 from configparser import ConfigParser
 from functools import partial
 
+from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import QApplication, QWidget, QDesktopWidget, \
     QLabel, QLineEdit, QCheckBox, QPushButton, QHBoxLayout, QFormLayout, \
     QVBoxLayout, QMessageBox, QSystemTrayIcon, QMenu, QAction
 from PyQt5.QtGui import QIcon, QPixmap
 
 from client import WebSocketClient
-from quamash import QEventLoop
 
 base_dir = os.getcwd()
 conf = os.path.join(base_dir, 'conf.ini')
@@ -61,64 +61,64 @@ class LoginWin(QWidget):
         # set title
         self.setWindowTitle('SheepOA Client v1.0')
 
-        ip = QLabel(_('Server IP:  '))
-        ip_edit = QLineEdit()
-        port = QLabel(_('Server Port:  '))
-        port_edit = QLineEdit()
-        user = QLabel(_('Username:  '))
-        user_edit = QLineEdit()
-        passwd = QLabel(_('Password:  '))
-        passwd_edit = QLineEdit()
-        passwd_edit.setEchoMode(QLineEdit.PasswordEchoOnEdit)
-        remember = QCheckBox(_('Remember password'))
-        remember.stateChanged.connect(partial(self.remember_passwd, remember))
+        self.ip = QLabel(_('Server IP:  '))
+        self.ip_edit = QLineEdit()
+        self.port = QLabel(_('Server Port:  '))
+        self.port_edit = QLineEdit()
+        self.user = QLabel(_('Username:  '))
+        self.user_edit = QLineEdit()
+        self.passwd = QLabel(_('Password:  '))
+        self.passwd_edit = QLineEdit()
+        self.passwd_edit.setEchoMode(QLineEdit.PasswordEchoOnEdit)
+        self.remember = QCheckBox(_('Remember password'))
+        self.remember.stateChanged.connect(self.remember_passwd)
 
         # load conf and initilize components
         self.dconf = {}
         if os.path.exists(conf):
             self.dconf = conf_load(self.parser, conf)
-            ip_edit.setText(self.dconf['ip'])
-            port_edit.setText(self.dconf['port'])
-            user_edit.setText(self.dconf['username'])
-            remember.setChecked(True if 'remember_passwd' in self.dconf.keys(
-            ) and self.dconf['remember_passwd'] == 'True' else False)
-            if remember.isChecked():
-                passwd_edit.setText(self.dconf['passwd'])
+            self.ip_edit.setText(self.dconf['ip'])
+            self.port_edit.setText(self.dconf['port'])
+            self.user_edit.setText(self.dconf['username'])
+            self.remember.setChecked(
+                True if 'remember_passwd' in self.dconf.keys()
+                and self.dconf['remember_passwd'] == 'True' else False)
+            if self.remember.isChecked():
+                self.passwd_edit.setText(self.dconf['passwd'])
 
-        login_btn = QPushButton(_('Login'))
-        self.login_wait = QLabel(
-            _(
-                '\nType the all information above Form.\nClick the "Login" button to continue!'
-            ))
-        self.login_wait.setStyleSheet("QLabel{color:rgb(70,140,200,240);}")
-        login_btn.clicked[bool].connect(
+        self.login_btn = QPushButton(_('Login'))
+        self.tip = QLabel(
+            _('\nType the all information above Form.\nClick the "Login" button to continue!'
+              ))
+        self.tip.setStyleSheet("QLabel{color:rgb(70,140,200,240);}")
+        self.login_btn.clicked[bool].connect(
             partial(
                 self.login, {
-                    'ip': ip_edit,
-                    'port': port_edit,
-                    'username': user_edit,
-                    'passwd': passwd_edit
+                    'ip': self.ip_edit,
+                    'port': self.port_edit,
+                    'username': self.user_edit,
+                    'passwd': self.passwd_edit
                 }))
 
         form = QFormLayout()
-        form.addRow(ip, ip_edit)
-        form.addRow(port, port_edit)
-        form.addRow(user, user_edit)
-        form.addRow(passwd, passwd_edit)
+        form.addRow(self.ip, self.ip_edit)
+        form.addRow(self.port, self.port_edit)
+        form.addRow(self.user, self.user_edit)
+        form.addRow(self.passwd, self.passwd_edit)
 
         check_box = QHBoxLayout()
         check_box.addStretch(1)
-        check_box.addWidget(remember)
+        check_box.addWidget(self.remember)
         check_box.addStretch(1)
 
         btn_box = QHBoxLayout()
         btn_box.addStretch(1)
-        btn_box.addWidget(login_btn)
+        btn_box.addWidget(self.login_btn)
         btn_box.addStretch(1)
 
         label_box = QHBoxLayout()
         label_box.addStretch(1)
-        label_box.addWidget(self.login_wait)
+        label_box.addWidget(self.tip)
         label_box.addStretch(1)
 
         vbox = QVBoxLayout()
@@ -129,6 +129,7 @@ class LoginWin(QWidget):
 
         self.setLayout(vbox)
         self.show()
+        self.tray.show()
 
     def closeEvent(self, event):
         """override default exit event"""
@@ -161,12 +162,15 @@ class LoginWin(QWidget):
                 critical(
                     _('Critical'),
                     _('{} can\'t be empty!').format({
-
-                    'ip': _('The server IP'),
-                    'port': _('The server port'),
-                    'username': _('The username'),
-                    'passwd': _('The password')
-                                                    }.get(k)),
+                        'ip':
+                        _('The server IP'),
+                        'port':
+                        _('The server port'),
+                        'username':
+                        _('The username'),
+                        'passwd':
+                        _('The password')
+                    }.get(k)),
                     parent=self)
                 return (False, None)
         return (True, self.dconf)
@@ -177,12 +181,15 @@ class LoginWin(QWidget):
         if r and d:
             # save config to file
             conf_save(self.parser, d)
+            self.change_status(False)
             # process login
             # self.start_login(d)
             # loop = asyncio.get_event_loop()
-            import threading
-            t = threading.Thread(target=self.start_login, args=(d,))
-            t.start()
+            netth = NetThread(d, parent=self)
+            netth.login_succeed_signal.connect(self.login_succeed)
+            netth.login_failed_signal.connect(self.login_failed)
+            netth.recevied_notify_signal.connect(self.recevied_notify)
+            netth.start()
 
     def start_login(self, d):
         wsc = WebSocketClient(d['ip'], d['port'], d['username'], d['passwd'])
@@ -193,27 +200,66 @@ class LoginWin(QWidget):
 
     def login_succeed(self):
         # login succeed
-        self.tray.show()
         self.setVisible(False)
 
     def login_failed(self):
-        self.login_wait.setText(_('\nLogin Failed!\n\n'
-                    'To fix this issue, please try:\n'
-                    '1.Make sure your network is fine\n'
-                    '2.Make sure the \'IP\' and \'PORT\' of server is right\n'
-                    '3.Check the username and password is right or not'))
-        self.login_wait.setStyleSheet("QLabel{color:rgb(240,0,0,240);}")
+        information(
+            _('Login Failed!'),
+            _('To fix this issue, please try:\n'
+              '1. Make sure the network of computer is working fine;\n'
+              '2. Make sure the \'IP\' and \'PORT\' of server is right;\n'
+              '4. Close the firewall of system and try again;\n'
+              '3. Check the username and password is right or not.'),
+            parent=self)
+        self.change_status(True)
 
     def recevied_notify(self, msg):
         self.tray.show_msg(msg)
 
-    def remember_passwd(self, checkbox):
-        if checkbox.isChecked():
+    def remember_passwd(self):
+        if self.remember.isChecked():
             self.dconf['remember_passwd'] = 'True'
         else:
             self.dconf['remember_passwd'] = 'False'
             self.dconf.pop('passwd')
         conf_save(self.parser, self.dconf)
+
+    def change_status(self, enable=True):
+        if enable:
+            self.ip_edit.setDisabled(False)
+            self.port_edit.setDisabled(False)
+            self.user_edit.setDisabled(False)
+            self.passwd_edit.setDisabled(False)
+            self.remember.setDisabled(False)
+            self.login_btn.setDisabled(False)
+            self.tip.setText(
+                _('\nType the all information above Form.\nClick the "Login" button to continue!'
+                  ))
+            self.tip.setStyleSheet("QLabel{color:rgb(70,140,200,240);}")
+        else:
+            self.ip_edit.setDisabled(True)
+            self.port_edit.setDisabled(True)
+            self.user_edit.setDisabled(True)
+            self.passwd_edit.setDisabled(True)
+            self.remember.setDisabled(True)
+            self.login_btn.setDisabled(True)
+            self.tip.setText(_('\nLongin ...'))
+            self.tip.setStyleSheet("QLabel{color:rgb(200,0,0,240);}")
+
+
+class NetThread(QThread):
+    login_succeed_signal = pyqtSignal()
+    login_failed_signal = pyqtSignal()
+    recevied_notify_signal = pyqtSignal(str)
+
+    def __init__(self, dconf, parent=None):
+        super(NetThread, self).__init__(parent)
+        self.d = dconf
+
+    def run(self):
+        wsc = WebSocketClient(self, self.d['ip'], self.d['port'],
+                              self.d['username'], self.d['passwd'])
+        wsc.start()
 
 
 # overrid QMessageBox

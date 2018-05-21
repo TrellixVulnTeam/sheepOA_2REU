@@ -12,7 +12,6 @@
 """
 
 import json
-import threading
 import asyncio
 
 import websockets
@@ -21,24 +20,25 @@ import util
 
 
 class WebSocketClient(object):
-
-    def __init__(self, ser_ip, ser_port, username, passwd):
+    def __init__(self, thread, ser_ip, ser_port, username, passwd):
+        self.thread = thread
         self.ser_ip = ser_ip
         self.ser_port = ser_port
         self.username = username
         self.passwd = passwd
-        self.handlers = {}
-
-    def add_handler(self, e_type, handler):
-        self.handlers[e_type] = handler
+        self.singals = {}
 
     async def run(self):
         async with websockets.connect(''.join(
-                ['ws://', self.ser_ip, ':', str(self.ser_port)])) as ws:
+            ['ws://', self.ser_ip, ':',
+             str(self.ser_port)])) as ws:
             # login request
             # message format: {'type': 'auth', 'name': 'shy', 'passwd': '12345'}
-            auth_msg = {'type': 'auth', 'name': self.username,
-                        'passwd': self.passwd}
+            auth_msg = {
+                'type': 'auth',
+                'name': self.username,
+                'passwd': self.passwd
+            }
             print('==> Client send: {}'.format(auth_msg))
             await ws.send(json.dumps(auth_msg))
             await self.recevied(ws)
@@ -46,8 +46,8 @@ class WebSocketClient(object):
     async def recevied(self, ws):
         recv_task = asyncio.ensure_future(ws.recv())
         while True:
-            done, pendding = await asyncio.wait([recv_task],
-                                        return_when=asyncio.FIRST_COMPLETED)
+            done, pendding = await asyncio.wait(
+                [recv_task], return_when=asyncio.FIRST_COMPLETED)
             if recv_task in done:
                 r = recv_task.result()
                 if r is not None:
@@ -55,13 +55,13 @@ class WebSocketClient(object):
                     msg = util.js_to_msg(r)
                     if msg._type == 'auth' and msg.content:
                         # login secceed
-                        self.handlers['login_succeed']()
+                        self.thread.login_succeed_signal.emit()
                     elif msg._type == 'auth' and not msg.content:
                         # login failed
-                        self.handlers['login_failed']()
+                        self.thread.login_failed_signal.emit()
                     elif msg._type == 'notify' and msg.to == self.username:
                         # to my message
-                        self.handlers['recevied_notify'](msg)
+                        self.thread.recevied_notify_signal.emit(r)
                     recv_task = asyncio.ensure_future(ws.recv())
 
     def start(self):

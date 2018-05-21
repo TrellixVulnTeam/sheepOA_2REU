@@ -13,12 +13,15 @@
 
 import sys
 import json
+import queue
 import asyncio
 
 import websockets
 
 import util
 
+
+msg_queue = queue.Queue()
 
 class GraceFuture(asyncio.Future):
     def __init__(self):
@@ -50,8 +53,7 @@ class Client(object):
 
     def login(self, d_msg):
         print('==> Server client login: {}'.format(d_msg))
-        if d_msg['name'] in Client.users and d_msg['passwd'] == Client.users[
-            d_msg['name']]:
+        if d_msg['name'] in Client.users and d_msg['passwd'] == Client.users[d_msg['name']]:
             self.islogin = True
         else:
             self.islogin = False
@@ -73,7 +75,7 @@ class Server(object):
     def auth_resp(self, client):
         clients = self.get_clients()
         resp = util.ResponseMsg('auth', None, client.username,
-                           client.islogin).to_json()
+                                client.islogin).to_json()
         for client in clients:
             print('==> Server response message to client: {}-->{}'.format(
                 resp, client.username))
