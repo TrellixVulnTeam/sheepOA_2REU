@@ -20,18 +20,20 @@ import util
 
 
 class WebSocketClient(object):
+
     def __init__(self, thread, ser_ip, ser_port, username, passwd):
         self.thread = thread
         self.ser_ip = ser_ip
         self.ser_port = ser_port
         self.username = username
         self.passwd = passwd
-        self.singals = {}
+
 
     async def run(self):
         async with websockets.connect(''.join(
             ['ws://', self.ser_ip, ':',
-             str(self.ser_port)])) as ws:
+             str(self.ser_port)]), timeout=1) as ws:
+
             # login request
             # message format: {'type': 'auth', 'name': 'shy', 'passwd': '12345'}
             auth_msg = {
@@ -51,7 +53,7 @@ class WebSocketClient(object):
             if recv_task in done:
                 r = recv_task.result()
                 if r is not None:
-                    print('==> Clinet recevied notify: {}'.format(r))
+                    print('==> Clinet recevied message: {}'.format(r))
                     msg = util.js_to_msg(r)
                     if msg._type == 'auth' and msg.content:
                         # login secceed
@@ -59,6 +61,7 @@ class WebSocketClient(object):
                     elif msg._type == 'auth' and not msg.content:
                         # login failed
                         self.thread.login_failed_signal.emit()
+                        # await ws.close(code=1000, reson='')
                     elif msg._type == 'notify' and msg.to == self.username:
                         # to my message
                         self.thread.recevied_notify_signal.emit(r)
@@ -68,20 +71,3 @@ class WebSocketClient(object):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         asyncio.get_event_loop().run_until_complete(self.run())
-
-
-def login_succeed():
-    print('==> Login succeed!')
-
-
-def login_failed():
-    print('==> Login failed!')
-
-
-def recevied_notify():
-    print('==> Recevied notify!')
-
-
-if __name__ == '__main__':
-    client = WebSocketClient('127.0.0.1', 4096, 'shy', '12345')
-    client.start()

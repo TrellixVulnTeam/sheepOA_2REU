@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import QApplication, QWidget, QDesktopWidget, \
     QVBoxLayout, QMessageBox, QSystemTrayIcon, QMenu, QAction
 from PyQt5.QtGui import QIcon, QPixmap
 
+import util
 from client import WebSocketClient
 
 base_dir = os.getcwd()
@@ -181,22 +182,14 @@ class LoginWin(QWidget):
         if r and d:
             # save config to file
             conf_save(self.parser, d)
+
             self.change_status(False)
-            # process login
-            # self.start_login(d)
-            # loop = asyncio.get_event_loop()
+
             netth = NetThread(d, parent=self)
             netth.login_succeed_signal.connect(self.login_succeed)
             netth.login_failed_signal.connect(self.login_failed)
             netth.recevied_notify_signal.connect(self.recevied_notify)
             netth.start()
-
-    def start_login(self, d):
-        wsc = WebSocketClient(d['ip'], d['port'], d['username'], d['passwd'])
-        wsc.add_handler('login_succeed', self.login_succeed)
-        wsc.add_handler('login_failed', self.login_failed)
-        wsc.add_handler('recevied_notify', self.recevied_notify)
-        wsc.start()
 
     def login_succeed(self):
         # login succeed
@@ -259,6 +252,7 @@ class NetThread(QThread):
     def run(self):
         wsc = WebSocketClient(self, self.d['ip'], self.d['port'],
                               self.d['username'], self.d['passwd'])
+
         wsc.start()
 
 
@@ -273,6 +267,7 @@ def question(rtext, info, event=None, parent=None):
     msg_box.setDefaultButton(
         msg_box.addButton(_('No'), QMessageBox.RejectRole))
     replay = msg_box.exec()
+
     if replay == QMessageBox.AcceptRole:
         event.accept()
     else:
@@ -289,6 +284,7 @@ def warning(rtext, info, event=None, parent=None):
     msg_box.setDefaultButton(
         msg_box.addButton(_('No'), QMessageBox.RejectRole))
     replay = msg_box.exec()
+
     if replay == QMessageBox.AcceptRole:
         event.accept()
     else:
@@ -304,6 +300,7 @@ def information(rtext, info, event=None, parent=None):
     msg_box.setDefaultButton(
         msg_box.addButton(_('Ok'), QMessageBox.DestructiveRole))
     replay = msg_box.exec()
+
     if replay == QMessageBox.DestructiveRole:
         event.ignore()
 
@@ -317,6 +314,7 @@ def critical(rtext, info, event=None, parent=None):
     msg_box.setDefaultButton(
         msg_box.addButton(_('Ok'), QMessageBox.DestructiveRole))
     replay = msg_box.exec()
+
     if replay == QMessageBox.DestructiveRole:
         event.ignore()
 
@@ -347,11 +345,12 @@ class Tray(QSystemTrayIcon):
 
     def show_msg(self, msg):
         icon = QSystemTrayIcon.MessageIcon(QSystemTrayIcon.Information)
-        self.url = msg.content
+        m = util.js_to_msg(msg)
+        self.url = m.content
         self.showMessage(
             _('Notify!'),
             _('A new message from {}.\nClicked this to view detail of:\n{}'. \
-            format(msg._from, msg.content)), icon)
+            format(m._from, self.url)), icon)
 
     def msg_click(self):
         # fork a webbroser object to open url

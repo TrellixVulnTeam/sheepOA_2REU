@@ -11,6 +11,7 @@
 """
 
 import json
+from functools import wraps
 
 class ResponseMsg(object):
 
@@ -29,3 +30,27 @@ class ResponseMsg(object):
 def js_to_msg(js):
     d = json.loads(js)
     return ResponseMsg(d['type'], d['from'], d['to'], d['content'])
+
+
+def signaleton(cls):
+    _instance = {}
+
+    @wraps(cls)
+    def getinstance(*args, **kwargs):
+        if cls not in _instance:
+            _instance[cls] = cls(*args, **kwargs)
+        return _instance[cls]
+    return getinstance
+
+
+@signaleton
+class A(object):
+    def out(self):
+        print(self)
+
+
+if __name__ == '__main__':
+    a = A()
+    a1 = A()
+    a.out()
+    a1.out()

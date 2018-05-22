@@ -17,6 +17,7 @@ import queue
 import asyncio
 
 import websockets
+from websockets.exceptions import ConnectionClosed
 
 import util
 
@@ -40,8 +41,8 @@ class Client(object):
         self.cid = cid
         self.ws = ws
         self.username = None
-        self.islogin = False
-        self.isalive = True
+        self.login = False
+        self.alive = True
         self.future = GraceFuture()
 
     async def produce(self):
@@ -51,12 +52,12 @@ class Client(object):
         self.future = GraceFuture()
         return result
 
-    def login(self, d_msg):
+    def auth(self, d_msg):
         print('==> Server client login: {}'.format(d_msg))
         if d_msg['name'] in Client.users and d_msg['passwd'] == Client.users[d_msg['name']]:
-            self.islogin = True
+            self.login = True
         else:
-            self.islogin = False
+            self.login = False
         self.username = d_msg['name']
 
     def pre_send(self, message):
@@ -73,13 +74,11 @@ class Server(object):
         return self.ra_to_client.values()
 
     def auth_resp(self, client):
-        clients = self.get_clients()
         resp = util.ResponseMsg('auth', None, client.username,
-                                client.islogin).to_json()
-        for client in clients:
-            print('==> Server response message to client: {}-->{}'.format(
+                                client.login).to_json()
+        print('==> Server response message to client: {}-->{}'.format(
                 resp, client.username))
-            client.pre_send(resp)
+        client.pre_send(resp)
 
     def ws_message_handle(self, ws, message):
         print('==> Server handle message: {}'.format(message))
@@ -87,7 +86,7 @@ class Server(object):
         client = self.ra_to_client.get(ra, None)
         d_msg = json.loads(message)
         if client is not None and d_msg['type'] == 'auth':
-            client.login(d_msg)
+            client.auth(d_msg)
             self.auth_resp(client)
 
     async def ws_handler(self, ws, path):
@@ -95,35 +94,49 @@ class Server(object):
         client = Client(len(self.ra_to_client), ws)
         self.ra_to_client[ra] = client
         print('==> Server accept client: {}'.format(ra))
+        for client in self.get_clients():
+            print('==> Server client status: {}'.format(client.alive))
 
         presend_task = asyncio.ensure_future(client.produce())
         recevied_task = asyncio.ensure_future(ws.recv())
 
-        while client.isalive:
-            done, pendding = await asyncio.wait(
-                [presend_task, recevied_task],
-                return_when=asyncio.FIRST_COMPLETED)
+        try:
+            while client.alive:
+                done, pendding = await asyncio.wait(
+                    [presend_task, recevied_task],
+                    return_when=asyncio.FIRST_COMPLETED)
 
-            # send message
-            if presend_task in done:
-                messages = presend_task.result()
-                if ws.open:
-                    for m in messages:
-                        await ws.send(m)
-                        print('==> Server send: {}'.format(m))
-                    presend_task = asyncio.ensure_future(client.produce())
-                else:
-                    client.isalive = False
+                # send message
+                if presend_task in done:
+                    messages = presend_task.result()
+                    if ws.open:
+                        for m in messages:
+                            await ws.send(m)
+                            print('==> Server send: {}'.format(m))
 
-            # recevied message
-            if recevied_task in done:
-                message = recevied_task.result()
-                if message is None:
-                    client.isalive = False
-                else:
-                    print('==> Server recevied: {}'.format(message))
-                    self.ws_message_handle(ws, message)
-                    recevied_task = asyncio.ensure_future(ws.recv())
+                        presend_task = asyncio.ensure_future(client.produce())
+                        if client.login:
+                            await asyncio.sleep(10)
+                            test = util.ResponseMsg('notify', 'test', client.username,
+                                'www.baidu.com').to_json()
+                            client.pre_send(test)
+                    else:
+                        client.alive = False
+
+                # recevied message
+                if recevied_task in done:
+                    if ws.open:
+                        message = recevied_task.result()
+                        if message is None:
+                            client.alive = False
+                        else:
+                            print('==> Server recevied: {}'.format(message))
+                            self.ws_message_handle(ws, message)
+                            recevied_task = asyncio.ensure_future(ws.recv())
+                    else:
+                        client.alive = False
+        except ConnectionClosed:
+            pass
 
         del self.ra_to_client[ra]
 
@@ -134,6 +147,7 @@ class Server(object):
 
 
 if __name__ == '__main__':
+
     ser = Server()
     ser.run()
     sys.exit(ser)
